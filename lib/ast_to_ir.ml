@@ -321,7 +321,7 @@ let transform_tailrec env fname params stmt =
       let copies =
         List.map2 (fun param op ->
           Move { dest = Name (find_var_unique env param.pname |> Option.get); src = op }
-          params arg_ops
+        ) params arg_ops  (* 注意这里添加了闭合的括号 *)
       in
       arg_instrs @ copies @ [Jump ("tailrec_entry_" ^ fname)]
       
