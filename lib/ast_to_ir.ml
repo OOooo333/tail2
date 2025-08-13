@@ -286,49 +286,80 @@ let generate (prog: Ast.comp_unit) : ir_program =
 
   (* --- 4. 顶层转换函数 --- *)
 
-(* 检查语句是否为尾递归调用 *)
+(* --- 尾递归优化 --- *)
+
+(* 判断语句是否为尾递归调用 *)
 let is_tail_recursive_call fname params stmt =
   match stmt with
-  | Ast.Return (Some (Ast.Call (name, args))) when name = fname && List.length args = List.length params -> Some args
-  | _ -> None
+  | Ast.Return (Some (Ast.Call (name, args))) when name = fname && List.length args = List.length params -> 
+      (* 检查参数是否直接对应形式参数，避免不必要的拷贝 *)
+      let rec check_direct_params args params =
+        match (args, params) with
+        | (Ast.Var a)::args_tl, p::params_tl when a = p.pname -> 
+            check_direct_params args_tl params_tl
+        | [], [] -> true
+        | _ -> false
+      in
+      if check_direct_params args params then `DirectParams args
+      else `NeedCopy args
+  | _ -> `NotTailRec
 
-(* 将单个 AST 函数定义转换为 IR 函数定义 *)
+(* 优化后的尾递归转换 *)
+let transform_tailrec env fname params stmt =
+  match is_tail_recursive_call fname params stmt with
+  | `DirectParams args ->
+      (* 情况1：参数直接对应形式参数，只需跳转 *)
+      [Jump ("tailrec_entry_" ^ fname)]
+      
+  | `NeedCopy args ->
+      (* 情况2：需要参数拷贝 *)
+      let (arg_ops, arg_instrs) = 
+        List.map (gen_expr env) args 
+        |> List.split 
+        |> fun (ops, instrs) -> (ops, List.flatten instrs)
+      in
+      let copies =
+        List.map2 (fun param op ->
+          Move { dest = Name (find_var_unique env param.pname |> Option.get); src = op }
+          params arg_ops
+      in
+      arg_instrs @ copies @ [Jump ("tailrec_entry_" ^ fname)]
+      
+  | `NotTailRec ->
+      gen_stmt env stmt
+
+(* 优化后的函数定义生成 *)
 let gen_func_def (fdef: Ast.func_def) : ir_func =
   let env = make_env () in
   List.iter (fun p -> add_var env p.pname) fdef.params;
   let param_unames =
-    List.map (fun p -> match find_var_unique env p.pname with Some u -> u | None -> assert false) fdef.params
+    List.map (fun p -> find_var_unique env p.pname |> Option.get) fdef.params
   in
   let label_entry = "tailrec_entry_" ^ fdef.fname in
-  let transform_tailrec stmt =
-    match is_tail_recursive_call fdef.fname fdef.params stmt with
-    | Some args ->
-        (* 生成参数赋值和跳转 *)
-        let arg_ops, arg_instrs_list = List.map (gen_expr env) args |> List.split in
-        let all_arg_instrs = List.flatten arg_instrs_list in
-        let moves =
-          List.map2 (fun uname op -> Move { dest = Name uname; src = op }) param_unames arg_ops
+  
+  (* 新的函数体生成逻辑 *)
+  let rec gen_optimized_body = function
+    | Ast.Block stmts ->
+        let process_stmt stmt (acc, is_tail) =
+          if is_tail then (acc, true) (* 尾位置之后的语句不会执行 *)
+          else
+            match stmt with
+            | Ast.Return _ -> 
+                (acc @ transform_tailrec env fdef.fname fdef.params stmt, true)
+            | _ -> 
+                (acc @ gen_stmt env stmt, false)
         in
-        all_arg_instrs @ moves @ [Jump label_entry]
-    | None ->
-        gen_stmt env stmt
+        let (instrs, _) = List.fold_left process_stmt ([], false) stmts in
+        [Label label_entry] @ instrs
+        
+    | other_stmt ->
+        [Label label_entry] @ transform_tailrec env fdef.fname fdef.params other_stmt
   in
-  let body_instrs =
-    match fdef.body with
-    | Block stmts when stmts <> [] ->
-        let last_stmt = List.hd (List.rev stmts) in
-        let prefix = List.rev (List.tl (List.rev stmts)) in
-        let prefix_instrs = List.map (gen_stmt env) prefix |> List.flatten in
-        [Label label_entry]
-        @ prefix_instrs
-        @ transform_tailrec last_stmt
-    | _ ->
-        [Label label_entry] @ gen_stmt env fdef.body
-  in
+  
   {
     name = fdef.fname;
     params = param_unames;
-    body = body_instrs;
+    body = gen_optimized_body fdef.body;
   }
 
 (* 程序的总入口：将整个 AST 编译单元转换为 IR 程序 *)
