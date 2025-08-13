@@ -321,7 +321,7 @@ let transform_tailrec env fname params stmt =
       let copies =
         List.map2 (fun param op ->
           Move { dest = Name (find_var_unique env param.pname |> Option.get); src = op }
-        ) params arg_ops  (* 注意这里添加了闭合的括号 *)
+        ) params arg_ops
       in
       arg_instrs @ copies @ [Jump ("tailrec_entry_" ^ fname)]
       
@@ -338,29 +338,32 @@ let gen_func_def (fdef: Ast.func_def) : ir_func =
   let label_entry = "tailrec_entry_" ^ fdef.fname in
   
   (* 新的函数体生成逻辑 *)
-  let rec gen_optimized_body = function
-    | Ast.Block stmts ->
-        let process_stmt (acc, is_tail) stmt =
-          if is_tail then 
-            (acc, true) (* 尾位置之后的语句不会执行 *)
-          else
-            match stmt with
-            | Ast.Return _ -> 
-                (acc @ transform_tailrec env fdef.fname fdef.params stmt, true)
-            | _ -> 
-                (acc @ gen_stmt env stmt, false)
-        in
+  let rec gen_optimized_body stmts =
+    let process_stmt (acc, is_tail) stmt =
+      if is_tail then 
+        (acc, true) (* 尾位置之后的语句不会执行 *)
+      else
+        match stmt with
+        | Ast.Return _ -> 
+            (acc @ transform_tailrec env fdef.fname fdef.params stmt, true)
+        | _ -> 
+            (acc @ gen_stmt env stmt, false)
+    in
+    
+    match stmts with
+    | [stmt] -> 
+        [Label label_entry] @ transform_tailrec env fdef.fname fdef.params stmt
+    | stmts ->
         let (instrs, _) = List.fold_left process_stmt ([], false) stmts in
         [Label label_entry] @ instrs
-        
-    | other_stmt ->
-        [Label label_entry] @ transform_tailrec env fdef.fname fdef.params other_stmt
   in
   
   {
     name = fdef.fname;
     params = param_unames;
-    body = gen_optimized_body fdef.body;
+    body = match fdef.body with
+           | Ast.Block stmts -> gen_optimized_body stmts
+           | other -> gen_optimized_body [other];
   }
 
 (* 程序的总入口：将整个 AST 编译单元转换为 IR 程序 *)
