@@ -292,22 +292,22 @@ let generate (prog: Ast.comp_unit) : ir_program =
 let is_tail_recursive_call fname params stmt =
   match stmt with
   | Ast.Return (Some (Ast.Call (name, args))) when name = fname && List.length args = List.length params -> 
-      (* 检查参数是否直接对应形式参数，避免不必要的拷贝 *)
+      (* 检查参数是否直接对应形式参数 *)
       let rec check_direct_params args params =
-        match (args, params) with
-        | (Ast.Var a)::args_tl, p::params_tl when a = p.pname -> 
+        match args, params with
+        | Ast.Var a :: args_tl, p :: params_tl when a = p.pname -> 
             check_direct_params args_tl params_tl
         | [], [] -> true
         | _ -> false
       in
-      if check_direct_params args params then `DirectParams args
+      if check_direct_params args params then `DirectParams
       else `NeedCopy args
   | _ -> `NotTailRec
 
 (* 优化后的尾递归转换 *)
 let transform_tailrec env fname params stmt =
   match is_tail_recursive_call fname params stmt with
-  | `DirectParams args ->
+  | `DirectParams ->
       (* 情况1：参数直接对应形式参数，只需跳转 *)
       [Jump ("tailrec_entry_" ^ fname)]
       
@@ -337,8 +337,8 @@ let gen_func_def (fdef: Ast.func_def) : ir_func =
   in
   let label_entry = "tailrec_entry_" ^ fdef.fname in
   
-  (* 新的函数体生成逻辑 *)
-  let rec gen_optimized_body stmts =
+  (* 函数体生成逻辑 *)
+  let gen_optimized_body stmts =
     let process_stmt (acc, is_tail) stmt =
       if is_tail then 
         (acc, true) (* 尾位置之后的语句不会执行 *)
@@ -366,6 +366,6 @@ let gen_func_def (fdef: Ast.func_def) : ir_func =
            | other -> gen_optimized_body [other];
   }
 
-(* 程序的总入口：将整个 AST 编译单元转换为 IR 程序 *)
+(* 程序的总入口 *)
 let generate (prog: Ast.comp_unit) : ir_program =
   List.map gen_func_def prog
