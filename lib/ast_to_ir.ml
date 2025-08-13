@@ -340,8 +340,9 @@ let gen_func_def (fdef: Ast.func_def) : ir_func =
   (* 新的函数体生成逻辑 *)
   let rec gen_optimized_body = function
     | Ast.Block stmts ->
-        let process_stmt stmt (acc, is_tail) =
-          if is_tail then (acc, true) (* 尾位置之后的语句不会执行 *)
+        let process_stmt (acc, is_tail) stmt =
+          if is_tail then 
+            (acc, true) (* 尾位置之后的语句不会执行 *)
           else
             match stmt with
             | Ast.Return _ -> 
