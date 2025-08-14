@@ -70,22 +70,7 @@ rule token = parse
   | eof                      { EOF }
 
   (* 错误字符 *)
-  (* | _ ->
-      let pos = lexbuf.lex_curr_p in
-      (* 使用 Lexing.lexeme 来获取匹配到的非法字符(串) *)
-      let char_str = Lexing.lexeme lexbuf in
-      let msg = Printf.sprintf "Unexpected character '%s'" char_str in
-      raise (LexerError (msg, pos)) *)
    | _                        { raise (Error ("Unexpected character: " ^ Lexing.lexeme lexbuf)) }  
-
-(* and comment = parse
-  | "*/"           { token lexbuf } (* 结束多行注释 *)
-  | '\n'           { Lexing.new_line lexbuf; comment lexbuf } (* Keep track of lines inside comments *)
-  | eof            {
-      let pos = lexbuf.lex_curr_p in
-      raise (LexerError ("Unterminated multi-line comment", pos))
-    }
-  | _              { comment lexbuf } *)
 
 and comment = parse
   | "*/"                     { token lexbuf }                    (* 结束多行注释 *)
