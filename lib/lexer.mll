@@ -12,7 +12,6 @@ let keywords = [
   ("continue", CONTINUE);
   ("return",   RETURN);
 ]
-
 }
 
 (* 正则定义 *)
