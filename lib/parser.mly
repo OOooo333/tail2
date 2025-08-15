@@ -36,15 +36,15 @@ open Ast
 
 (* 顶层规则: 一个程序由零个或多个函数定义组成 *)
 program:
-  | list(func) EOF { $1 }
+  | list(func) EOF { $1 }  (*函数列表+EOF*)
 
 (* 函数定义规则 *)
 func:
   | typ ID LPAREN param_list RPAREN block
-    { { ftyp = $1;
-        fname = $2;
-        params = $4;
-        body = $6 } }
+    { { ftyp = $1;    (*返回类型*)
+        fname = $2;   (*函数名*) 
+        params = $4;  (*参数列表*)
+        body = $6 } } (*函数体代码块*)
 
 (* 代码块规则 *)
 block:
@@ -62,8 +62,8 @@ param:
 
 (* 基本类型规则 *)
 typ:
-  | INT { IntType }
-  | VOID { VoidType }
+  | INT { IntType }   (*整数类型*)
+  | VOID { VoidType } (*空类型*)
 
 (* 语句规则 *)
 stmt:
@@ -83,9 +83,9 @@ stmt:
 (* 变量声明规则 *)
 var_decl:
   | typ ID SEMI
-    { VarDecl($1, $2, None) }
+    { VarDecl($1, $2, None) }   (*无初始化*)
   | typ ID ASSIGN expr SEMI
-    { VarDecl($1, $2, Some $4) }
+    { VarDecl($1, $2, Some $4) }(*有初始化*)
 
 (* 表达式规则 *)
 expr:
@@ -108,10 +108,11 @@ expr:
   | primary               { $1 }
 
 (* 优先级最高的表达式单元 *)
+(*基础表达式规则*)
 primary:
-  | INT_LITERAL                                   { IntLit $1 }
-  | ID                                            { Var $1 }
-  | ID LPAREN separated_list(COMMA, expr) RPAREN  { Call($1, $3) }
-  | LPAREN expr RPAREN                            { $2 }
+  | INT_LITERAL { IntLit $1 } ( 整数字面量 )
+  | ID { Var $1 } ( 变量引用 )
+  | ID LPAREN separated_list(COMMA, expr) RPAREN { Call($1, $3) } ( 函数调用 )
+  | LPAREN expr RPAREN { $2 } ( 括号表达式 *)
 
 %%
