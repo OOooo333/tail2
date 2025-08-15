@@ -37,7 +37,7 @@ type stmt =
   | Assign of string * expr       (* 赋值语句 *)
   | If of expr * stmt * stmt option (* if-else, else 分支可选 *)
   | While of expr * stmt          (* while 循环 *)
-  | Break   (*break*)
+  | Break   (*break语句，跳出循环*)
   | Continue    (*continue*)
   | Return of expr option         (* return, 返回值可选，以支持 'return;' 和 'return 5;' *)
 
@@ -48,9 +48,9 @@ type param = {
   pname : string;
 }
 
-(* 函数定义 *)
+(* 完整函数定义 *)
 type func_def = {
-  ftyp : typ;                    (* 返回类型 *)
+  ftyp : typ;                      (* 返回类型 *)
   fname : string;                  (* 函数名 *)
   params : param list;             (* 参数列表 *)
   body : stmt;                     (* 函数体 *)
